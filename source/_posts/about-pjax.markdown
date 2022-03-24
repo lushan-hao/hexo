@@ -1,11 +1,11 @@
 ---
 layout: post
-title: "pjax: 当ajax遇上pushState"
-date: 2014-02-12 08:55
+title: "从输入一个url到展示到页面上发生了什么？"
+date: 2022-03-24 23:50
 comments: true
 tags: 
-	- js 
-	- html5
+	- 面试 
+	- 计算机网络
 ---
 
 >var pjax = pushState + ajax;                  
