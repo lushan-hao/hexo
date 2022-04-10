@@ -6,14 +6,18 @@
     "build": "hexo generate",
     "clean": "hexo clean",
     "deploy": "hexo deploy",
-    "start": "hexo server"
+    "start": "hexo server",
+    "web": "hexo clean && hexo generate && hexo deploy"
   },
   "hexo": {
     "version": "6.1.0"
   },
   "dependencies": {
     "bulma-stylus": "0.8.0",
+    "git": "^0.1.5",
     "hexo": "^6.0.0",
+    "hexo-deployer-git": "^3.0.0",
+    "hexo-deployer-rsync": "^1.0.0",
     "hexo-generator-archive": "^1.0.0",
     "hexo-generator-category": "^1.0.0",
     "hexo-generator-index": "^2.0.0",
