@@ -30,6 +30,7 @@
     "hexo-renderer-stylus": "^2.0.0",
     "hexo-server": "^3.0.0",
     "hexo-theme-icarus": "^5.0.0-rc.1",
-    "hexo-theme-landscape": "^0.0.3"
+    "hexo-theme-landscape": "^0.0.3",
+    "react": "^18.0.0"
   }
 }
