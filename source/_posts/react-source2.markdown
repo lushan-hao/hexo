@@ -1,12 +1,11 @@
 ---
 layout: draft
 title: "架构篇之 render 阶段"
-date: 2022-04-17 16:52
+date: 2022-06-08 16:52
 comments: true
 tags:
   - react
   - 源码
-  - 随笔
 ---
 
 > 莫笑少年江湖梦，谁不年少梦江湖。曾经年少立志三千里，如今踌躇百步无寸功。懵懂半生，庸碌尘世中。转眼高堂皆白发，儿女蹒跚学堂中。碎银几两催人老，心仍少。皱纹却上眉目中，浮生醉酒回梦里。青春人依旧，只叹时光太匆匆。
@@ -183,6 +182,7 @@ export function reconcileChildren(
 render 阶段的工作是在内存中进行，当工作结束后会通知 Renderer 需要执行的 DOM 操作。要执行 DOM 操作的具体类型就保存在 fiber.effectTag 中。
 
 ```js
+// effectTag
 // DOM需要插入到页面中
 export const Placement = /*                */ 0b00000000000010;
 // DOM需要更新
@@ -229,8 +229,130 @@ if (current !== null) {
 - oldProps === newProps && workInProgress.type === current.type: props 与 fiber.type 不变
 - !includesSomeLane(renderLanes, updateLanes): 当前 Fiber 节点优先级不够
 
-##### 归阶段 mount 的过程
+#### completeWork
 
-completeWork
+completeWork 也是针对不同 fiber.tag 调用不同的处理逻辑
+
+```ts
+function completeWork(
+  current: Fiber | null,
+  workInProgress: Fiber,
+  renderLanes: Lanes,
+): Fiber | null {
+  const newProps = workInProgress.pendingProps;
+
+  switch (workInProgress.tag) {
+    case IndeterminateComponent:
+    case LazyComponent:
+    case SimpleMemoComponent:
+    case FunctionComponent:
+    case ForwardRef:
+    case Fragment:
+    case Mode:
+    case Profiler:
+    case ContextConsumer:
+    case MemoComponent:
+      return null;
+    case ClassComponent: {
+      // ...省略
+      return null;
+    }
+    case HostRoot: {
+      // ...省略
+      updateHostContainer(workInProgress);
+      return null;
+    }
+    // 原生DOM组件对应的Fiber节点
+    case HostComponent: {
+      // ...省略
+      return null;
+    }
+  // ...省略
+```
+
+##### HostComponent
+
+```js
+case HostComponent: {
+  popHostContext(workInProgress);
+  const rootContainerInstance = getRootHostContainer();
+  const type = workInProgress.type;
+
+  if (current !== null && workInProgress.stateNode != null) {
+    // update的情况
+    // ...省略
+  } else {
+    // mount的情况
+    // ...省略
+  }
+  return null;
+}
+```
+
+也是根据 current === null ?判断是 mount 还是 update。但是同时针对 HostComponent，判断 update 时我们还需要考虑 workInProgress.stateNode != null ?（即该 Fiber 节点是否存在对应的 DOM 节点）
 
 ##### 归阶段 update 的过程
+
+当 update 时，Fiber 节点已经存在对应 DOM 节点，所以不需要生成 DOM 节点。需要做的主要是处理 props
+
+```js
+if (current !== null && workInProgress.stateNode != null) {
+  // update的情况
+  updateHostComponent(
+    current,
+    workInProgress,
+    type,
+    newProps,
+    rootContainerInstance
+  );
+}
+```
+
+主要是调用 updateHostComponent 函数
+在 updateHostComponent 内部，被处理完的 props 会被赋值给 workInProgress.updateQueue，并最终会在 commit 阶段被渲染在页面上。
+
+##### 归阶段 mount 的过程
+
+- 为 Fiber 节点生成对应的 DOM 节点
+- 将子孙 DOM 节点插入刚生成的 DOM 节点中
+- 与 update 逻辑中的 updateHostComponent 类似的处理 props 的过程
+
+```js
+const currentHostContext = getHostContext();
+// 为fiber创建对应DOM节点
+const instance = createInstance(
+  type,
+  newProps,
+  rootContainerInstance,
+  currentHostContext,
+  workInProgress
+);
+// 将子孙DOM节点插入刚生成的DOM节点中
+appendAllChildren(instance, workInProgress, false, false);
+// DOM节点赋值给fiber.stateNode
+workInProgress.stateNode = instance;
+
+// 与update逻辑中的updateHostComponent类似的处理props的过程
+if (
+  finalizeInitialChildren(
+    instance,
+    type,
+    newProps,
+    rootContainerInstance,
+    currentHostContext
+  )
+) {
+  markUpdate(workInProgress);
+}
+```
+
+##### effectList
+
+commit 阶段需要找到所有有 effectTag 的 Fiber 节点并依次执行 effectTag 对应操作
+在 commit 阶段不需要再遍历一遍了， completeWork 的上层函数 completeUnitOfWork 中，每个执行完 completeWork 且存在 effectTag 的 Fiber 节点会被保存在一条被称为 effectList 的单向链表中
+effectList 中第一个 Fiber 节点保存在 fiber.firstEffect，最后一个元素保存在 fiber.lastEffect。
+类似 appendAllChildren，在“归”阶段，所有有 effectTag 的 Fiber 节点都会被追加在 effectList 中，最终形成一条以 rootFiber.firstEffect 为起点的单向链表
+
+#### 结尾
+
+至此，render 阶段全部工作完成。在 performSyncWorkOnRoot 函数中 fiberRootNode 被传递给 commitRoot 方法，开启 commit 阶段工作流程。
