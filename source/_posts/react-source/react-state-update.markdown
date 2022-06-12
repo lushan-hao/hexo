@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "react状态更新"
+title: "react源码-react状态更新"
 date: 2022-06-24 20:00
 comments: true
 tags:
@@ -12,195 +12,230 @@ tags:
 
 <!-- more -->
 
-首先，需要明确 diff 算法发生在 beginWork 中的需要 uodate 的组件
+#### 流程
 
-> 1. current Fiber： 如果该 DOM 节点已在页面中，current Fiber 代表该 DOM 节点对应的 Fiber 节点
-> 2. workInProgress Fiber： 如果该 DOM 节点将在本次更新中渲染到页面中，workInProgress Fiber 代表该 DOM 节点对应的 Fiber 节点。
-> 3. DOM 节点本身。
-> 4. JSX 对象。即 ClassComponent 的 render 方法的返回结果，或 FunctionComponent 的调用结果。JSX 对象中包含描述 DOM 节点的信息。
->    Diff 算法的本质是对比 1 和 4，生成 2。
+梳理一下目前已知流程
 
-换言之，根据当前页面渲染的该 DOM 对应的 Fiber 和 jsx 对象做对比，生成将要更新的、在内存中生成的 Fiber
+> 触发状态更新 -> render 阶段（`performSyncWorkOnRoot` 或 `performConcurrentWorkOnRoot`） -> commit 阶段（`commitRoot`）
 
-#### Diff 的瓶颈以及 React 如何应对
+##### 创建 update 对象
 
-由于 Diff 操作本身也会带来性能损耗，React 文档中提到，即使在最前沿的算法中，将前后两棵树完全比对的算法的复杂程度为 O(n 3 )，其中 n 是树中元素的数量。
-所以 React 的 diff 有三个限制：
+在 React 中，有如下几种方法会触发状态的更新：
 
-- 只对同级元素进行 Diff。如果一个 DOM 节点在前后两次更新中跨越了层级，那么 React 不会尝试复用他。
-- 两个不同类型的元素会产生出不同的树。如果元素由 div 变为 p，React 会销毁 div 及其子孙节点，并新建 p 及其子孙节点。
-- 开发者可以通过 key prop 来暗示哪些子元素在不同的渲染下能保持稳定
+- ReactDOM.render
+- this.setState
+- this.forceUpdate
+- useState
+- useReducer
+  那么怎么做到全部触发状态更新：每次状态更新都会创建一个保存更新状态相关内容的对象，我们叫他 Update。在 render 阶段的 beginWork 中会根据 Update 计算新的 state
 
-由于 key 的存在，如果出现位置顺序变换等，就不会每个重新销毁渲染，而是保留交换顺序进行复用
+##### 从 fiber 到 root
 
-#### Diff 是如何实现的
+现在触发状态更新的 fiber 上已经包含 Update 对象，render 阶段是从 rootFiber 开始向下遍历。那么如何从触发状态更新的 fiber 得到 rootFiber 呢？调用 markUpdateLaneFromFiberToRoot 方法。
 
-入口函数: reconcileChildFibers()
+> markUpdateLaneFromFiberToRoot: 该方法做的工作可以概括为：从触发状态更新的 fiber 一直向上遍历到 rootFiber，并返回 rootFiber
 
-```ts
-// 根据newChild类型选择不同diff函数处理
-function reconcileChildFibers(
-  returnFiber: Fiber,
-  currentFirstChild: Fiber | null,
-  newChild: any
-): Fiber | null {
-  const isObject = typeof newChild === "object" && newChild !== null;
-  if (isObject) {
-    // object类型，可能是 REACT_ELEMENT_TYPE 或 REACT_PORTAL_TYPE
-    switch (newChild.$$typeof) {
-      case REACT_ELEMENT_TYPE:
-      // 调用 reconcileSingleElement 处理
-      // // ...省略其他case
-    }
-  }
-  if (typeof newChild === "string" || typeof newChild === "number") {
-    // 调用 reconcileSingleTextNode 处理
-    // ...省略
-  }
-  if (isArray(newChild)) {
-    // 调用 reconcileChildrenArray 处理
-    // ...省略
-  }
-  // 一些其他情况调用处理函数
-  // ...省略
-  // 以上都没有命中，删除节点
-  return deleteRemainingChildren(returnFiber, currentFirstChild);
+##### 调度更新
+
+现在我们拥有一个 rootFiber，该 rootFiber 对应的 Fiber 树中某个 Fiber 节点包含一个 Update。接下来通知 Scheduler 根据更新的优先级，决定以同步还是异步的方式调度本次更新。
+
+```js
+if (newCallbackPriority === SyncLanePriority) {
+  // 任务已经过期，需要同步执行render阶段
+  newCallbackNode = scheduleSyncCallback(
+    performSyncWorkOnRoot.bind(null, root)
+  );
+} else {
+  // 根据任务优先级异步执行render阶段
+  var schedulerPriorityLevel =
+    lanePriorityToSchedulerPriority(newCallbackPriority);
+  newCallbackNode = scheduleCallback(
+    schedulerPriorityLevel,
+    performConcurrentWorkOnRoot.bind(null, root)
+  );
 }
 ```
 
-可以从同级的节点数量将 Diff 分为两类：
+其中，scheduleCallback 和 scheduleSyncCallback 会调用 Scheduler 提供的调度方法根据优先级调度回调函数执行,其中调用`performSyncWorkOnRoot`和`performConcurrentWorkOnRoot`就是控制 render 阶段开始的调用了
 
-1.当 newChild 类型为 object、number、string，代表同级只有一个节点, 调用 reconcileSingleElement 或 reconcileSingleTextNode 处理
+此时的流程是
 
-2.当 newChild 类型为 Array，同级有多个节点, 调用 reconcileChildrenArray 处理
+> 触发状态更新 -> 创建 Update 对象 -> 从 fiber 到 root（`markUpdateLaneFromFiberToRoot`） -> 调度更新（`ensureRootIsScheduled`） -> render 阶段（`performSyncWorkOnRoot` 或 `performConcurrentWorkOnRoot`）-> commit 阶段（`commitRoot`）
 
-#### 单一节点的 diff
+#### 心智模型
 
-reconcileSingleElement（）函数流程如下
+- 同步更新时：在 React 中，所有通过 ReactDOM.render 创建的应用。此时没有优先级概念，高优更新需要排在其他更新后面执行
 
-![diff-reconcileSingleElement-1](/assets/blogImg/react-source/diff-reconcileSingleElement-1.png)
+- 异步更新时：在 React 中，通过 ReactDOM.createBlockingRoot 和 ReactDOM.createRoot 创建的应用会采用并发的方式更新状态。高优更新中断正在进行中的低优更新，先完成 render - commit 流程。待高优更新完成后，低优更新基于高优更新的结果重新更新。
 
-怎么判断是否可以复用呢？React 通过先判断 key 是否相同，如果 key 相同则判断 type 是否相同，只有都相同时一个 DOM 节点才能复用。
+#### update
+
+下面是如何创建 update 对象，到更新的流程，首先说一下 Update 的结构
+
+- ReactDOM.render —— HostRoot
+- this.setState —— ClassComponent
+- this.forceUpdate —— ClassComponent
+- useState —— FunctionComponent
+- useReducer —— FunctionComponent
+
+所以总共可以分为三种组件出发更新（HostRoot | ClassComponent | FunctionComponent）
+ClassComponent 与 HostRoot 共用一套 Update 结构，FunctionComponent 单独使用一种 Update 结构。先着重说下 ClassComponent 与 HostRoot
+
+##### update 结构
 
 ```js
-function reconcileSingleElement(
-  returnFiber: Fiber,
-  currentFirstChild: Fiber | null,
-  element: ReactElement
-): Fiber {
-  const key = element.key;
-  let child = currentFirstChild;
-  // 首先判断是否存在对应DOM节点
-  while (child !== null) {
-    // 上一次更新存在DOM节点，接下来判断是否可复用
-    // 首先比较key是否相同
-    if (child.key === key) {
-      // key相同，接下来比较type是否相同
-      switch (child.tag) {
-        // ...省略case
-        default: {
-          if (child.elementType === element.type) {
-            // type相同则表示可以复用
-            // 返回复用的fiber
-            return existing;
-          }
-          // type不同则跳出switch
-          break;
-        }
-      }
-      // 代码执行到这里代表：key相同但是type不同
-      // 将该fiber及其兄弟fiber标记为删除
-      deleteRemainingChildren(returnFiber, child);
-      break;
-    } else {
-      // key不同，将该fiber标记为删除
-      deleteChild(returnFiber, child);
-    }
-    child = child.sibling;
+const update: Update<*> = {
+  // eventTime：任务时间，通过performance.now()获取的毫秒数。由于该字段在未来会重构，当前我们不需要理解他。
+  eventTime,
+  // lane：优先级相关字段。当前还不需要掌握他，只需要知道不同Update优先级可能是不同的。
+  lane,
+  suspenseConfig,
+  // 更新的类型，包括UpdateState | ReplaceState | ForceUpdate | CaptureUpdate。
+  tag: UpdateState,
+  // 更新挂载的数据，不同类型组件挂载的数据不同。对于ClassComponent，payload为this.setState的第一个传参。对于HostRoot，payload为ReactDOM.render的第一个传参。
+  payload: null,
+  // 更新的回调函数。即在commit 阶段的 layout 子阶段一节中提到的回调函数。
+  callback: null,
+  // 与其他Update连接形成链表
+  next: null,
+};
+```
+
+##### update 和 Fiber 联系
+
+类似 Fiber 节点组成 Fiber 树，Fiber 节点上的多个 Update 会组成链表并被包含在 fiber.updateQueue 中。
+
+> 什么情况下一个 Fiber 节点会存在多个 Update？
+> 在一个 ClassComponent 中触发 this.onClick 方法，方法内部调用了两次 this.setState。这会在该 fiber 中产生两个 Update。
+
+Fiber 节点最多同时存在两个 updateQueue：
+-current fiber 保存的 updateQueue 即 current updateQueue
+-workInProgress fiber 保存的 updateQueue 即 workInProgress updateQueue
+
+在 commit 阶段完成页面渲染后，workInProgress Fiber 树变为 current Fiber 树，workInProgress Fiber 树内 Fiber 节点的 updateQueue 就变成 current updateQueue
+
+##### updateQueue
+
+下面就是 ClassComponent 与 HostRoot 使用的 UpdateQueue 结构
+
+```js
+const queue: UpdateQueue<State> = {
+  baseState: fiber.memoizedState,
+  firstBaseUpdate: null,
+  lastBaseUpdate: null,
+  shared: {
+    pending: null,
+  },
+  effects: null,
+};
+```
+
+[看完这个例子就会明白整个流程了](https://react.iamkasong.com/state/update.html#%E4%BE%8B%E5%AD%90)
+
+总结来说存留着上次 render 阶段没有处理的优先级较低的 Update，存在 bfiber.updateQueue.baseUpdate 中，本次更新产生的新的 Update 会存储在 fiber.updateQueue.shared.pending 中形成环状链表， render 时剪开环，连接在 updateQueue.lastBaseUpdate 后面，接下来遍历 updateQueue.baseUpdate 链表，以 fiber.updateQueue.baseState 为初始 state，依次与遍历到的每个 Update 计算并产生新的 state
+
+#### 深入理解优先级
+
+状态更新由用户交互产生，用户心里对交互执行顺序有个预期。React 根据人机交互研究的结果中用户对交互的预期顺序为交互产生的状态更新赋予不同优先级。
+
+- 生命周期方法：同步执行。
+- 受控的用户输入：比如输入框内输入文字，同步执行。
+- 交互事件：比如动画，高优先级执行。
+- 其他：比如数据请求，低优先级执行。
+
+##### 如何调度
+
+具体到代码，每当需要调度任务时，React 会调用 Scheduler 提供的方法 runWithPriority。该方法接收一个优先级常量与一个回调函数作为参数。回调函数会以优先级高低为顺序排列在一个定时器中并在合适的时间触发。
+
+![一个流程](../../assets/blogImg/react-source/update-process.png)
+
+[这个例子看着还是有点生涩，回头多看几遍](https://react.iamkasong.com/state/priority.html#%E4%BE%8B%E5%AD%90)
+
+##### 如何保证状态正确
+
+有两个问题：
+
+- render 阶段可能被中断。如何保证 updateQueue 中保存的 Update 不丢失？
+  实际上 shared.pending 会被同时连接在 workInProgress updateQueue.lastBaseUpdate 与 current updateQueue.lastBaseUpdate 后面。当 render 阶段被中断后重新开始时，会基于 current updateQueue 克隆出 workInProgress updateQueue。由于 current updateQueue.lastBaseUpdate 已经保存了上一次的 Update，所以不会丢失。当 commit 阶段完成渲染，由于 workInProgress updateQueue.lastBaseUpdate 中保存了上一次的 Update，所以 workInProgress Fiber 树变成 current Fiber 树后也不会造成 Update 丢失。
+
+- 有时候当前状态需要依赖前一个状态。如何在支持跳过低优先级状态的同时保证状态依赖的连续性？
+  重点就是当某个 Update 由于优先级低而被跳过时，保存在 baseUpdate 中的不仅是该 Update，还包括链表中该 Update 之后的所有 Update。
+
+#### ReactDOM.render
+
+走一下 ReactDOM.render 完成页面渲染的整个流程
+
+1. 首次执行 ReactDOM.render 会创建 fiberRootNode 和 rootFiber。其中 fiberRootNode 是整个应用的根节点，rootFiber 是要渲染组件所在组件树的根节点。
+   这一步发生在调用 ReactDOM.render 后进入的 legacyRenderSubtreeIntoContainer 方法中。
+2. legacyCreateRootFromDOMContainer 方法内部会调用 createFiberRoot 方法完成 fiberRootNode 和 rootFiber 的创建以及关联。并初始化 updateQueue
+3. 等待创建 Update 来开启一次更新
+
+再接上上面到达 render 阶段的流程
+
+> 创建 fiberRootNode、rootFiber、updateQueue（`legacyCreateRootFromDOMContainer`） -> 创建 Update 对象（`updateContainer`） -> 从 fiber 到 root（`markUpdateLaneFromFiberToRoot`） -> 调度更新（`ensureRootIsScheduled`） -> render 阶段（`performSyncWorkOnRoot` 或 `performConcurrentWorkOnRoot`） -> commit 阶段（`commitRoot`）
+
+##### React 的其他入口函数
+
+- legacy，这是当前 React 使用的方式。当前没有计划删除本模式，但是这个模式可能不支持一些新功能。
+- blocking，开启部分 concurrent 模式特性的中间模式。目前正在实验中。作为迁移到 concurrent 模式的第一个步骤。
+- concurrent，面向未来的开发模式。任务中断/任务优先级都是针对 concurrent 模式。
+
+可以通过不同的入口函数开启不同模式：
+
+- legacy -- ReactDOM.render(<App />, rootNode)
+- blocking -- ReactDOM.createBlockingRoot(rootNode).render(<App />)
+- concurrent -- ReactDOM.createRoot(rootNode).render(<App />)
+
+> 刚才看了一下，react18 已经使用`ReactDOM.createRoot(document.getElementById('root')).render()`去创建了，使用 concurrent 模式了
+
+#### this.setState
+
+this.setState 内会调用 this.updater.enqueueSetState 方法。在 enqueueSetState 方法中就是我们熟悉的从创建 update 到调度 update 的流程了
+
+```js
+enqueueSetState(inst, payload, callback) {
+  // 通过组件实例获取对应fiber
+  const fiber = getInstance(inst);
+  const eventTime = requestEventTime();
+  const suspenseConfig = requestCurrentSuspenseConfig();
+  // 获取优先级
+  const lane = requestUpdateLane(fiber, suspenseConfig);
+  // 创建update
+  const update = createUpdate(eventTime, lane, suspenseConfig);
+  update.payload = payload;
+  // 赋值回调函数
+  if (callback !== undefined && callback !== null) {
+    update.callback = callback;
   }
-  // 创建新Fiber，并返回 ...省略
+  // 将update插入updateQueue
+  enqueueUpdate(fiber, update);
+  // 调度update
+  scheduleUpdateOnFiber(fiber, lane, eventTime);
 }
 ```
 
-有个细节需要关注下：
+##### this.forceUpdate
 
-- 当 child !== null 且 key 相同且 type 不同时执行 deleteRemainingChildren 将 child 及其兄弟 fiber 都标记删除。
-- 当 child !== null 且 key 不同时仅将 child 标记删除。
+在 this.updater 上，除了 enqueueSetState 外，还存在 enqueueForceUpdate，当我们调用 this.forceUpdate 时会调用他。除了赋值 update.tag = ForceUpdate;以及没有 payload 外，其他逻辑与 this.setState 一致。
 
-> 这是因为，如果之前存在一组节点，现在替换成单一的节点，遍历原先的一组节点，先判断 key 是否相等，如果不想等，那么删除该节点即可，继续遍历改组下的其他节点，如果想等，代表此时已经找到，如果 type 仍然不相等，那么改组节点全部删除即可，后续不用再寻找了
-
-#### 多节点的 diff
-
-这里使用 reconcileChildrenArray 函数进行处理
-
-更新前多个节点，更新后多个节点，会出现一下三种情况之一或组合
-
-- 节点更新
-- 节点新增或减少
-- 节点位置变化
-
-##### diff 思路
-
-Diff 算法的整体逻辑会经历两轮遍历：
-
-1. 第一轮遍历：处理更新的节点。
-2. 第二轮遍历：处理剩下的不属于更新的节点
-
-> 在我们做数组相关的算法题时，经常使用双指针从数组头和尾同时遍历以提高效率，但是这里却不行。
-> 虽然本次更新的 JSX 对象 newChildren 为数组形式，但是和 newChildren 中每个组件进行比较的是 current fiber，同级的 Fiber 节点是由 sibling 指针链接形成的单链表，即不支持双指针遍历。
-> 即 newChildren[0]与 fiber 比较，newChildren[1]与 fiber.sibling 比较。
-> 所以无法使用双指针优化。
-
-**第一轮遍历**
-
-> 1.let i = 0，遍历 newChildren，将 newChildren[i]与 oldFiber 比较，判断 DOM 节点是否可复用。  
-> 2.如果可复用，i++，继续比较 newChildren[i]与 oldFiber.sibling，可以复用则继续遍历。  
-> 3.如果不可复用，分两种情况：
->
-> - key 不同导致不可复用，立即跳出整个遍历，第一轮遍历结束。
-> - key 相同 type 不同导致不可复用，会将 oldFiber 标记为 DELETION，并继续遍历
->
->   4.如果 newChildren 遍历完（即 i === newChildren.length - 1）或者 oldFiber 遍历完（即 oldFiber.sibling === null），跳出遍历，第一轮遍历结束。
-
-**第二轮遍历**
-
-此时，第一轮结束遍历后会出现四种情况
-
-- newChildren 与 oldFiber 同时遍历完： 那就是最理想的情况：只需在第一轮遍历进行组件更新 (opens new window)。此时 Diff 结束。
-- newChildren 没遍历完，oldFiber 遍历完： 此时所有已有节点都利用了，那么遍历剩余 newChildren，workInProgress fiber 依次标记 Placement（添加）即可
-- newChildren 遍历完，oldFiber 没遍历完： 意味着本次更新比之前的节点数量少，有节点被删除了。所以需要遍历剩下的 oldFiber，依次标记 Deletion。
-- newChildren 与 oldFiber 都没遍历完： 这意味着有节点在这次更新中改变了位置。
-
-着重说一下第四种情况，此时索引位置发生了改变，我们需要使用 key
+赋值 update.tag = ForceUpdate;有何作用呢？
 
 ```js
-const existingChildren = mapRemainingChildren(returnFiber, oldFiber);
+// 判断是否更新
+const shouldUpdate =
+  checkHasForceUpdateAfterProcessing() ||
+  checkShouldComponentUpdate(
+    workInProgress,
+    ctor,
+    oldProps,
+    newProps,
+    oldState,
+    newState,
+    nextContext
+  );
 ```
 
-接下来遍历剩余的 newChildren，通过 newChildren[i].key 就能在 existingChildren 中找到 key 相同的 oldFiber
+- checkHasForceUpdateAfterProcessing：内部会判断本次更新的 Update 是否为 ForceUpdate。即如果本次更新的 Update 中存在 tag 为 ForceUpdate，则返回 true。
+- checkShouldComponentUpdate：内部会调用 shouldComponentUpdate 方法。以及当该 ClassComponent 为 PureComponent 时会浅比较 state 与 props。
 
-**标记节点是否移动**
-
-```text
-我们的参照物是：最后一个可复用的节点在oldFiber中的位置索引（用变量lastPlacedIndex表示）。
-
-由于本次更新中节点是按newChildren的顺序排列。在遍历newChildren过程中，每个遍历到的可复用节点一定是当前遍历到的所有可复用节点中最靠右的那个，即一定在lastPlacedIndex对应的可复用的节点在本次更新中位置的后面。
-
-那么我们只需要比较遍历到的可复用节点在上次更新时是否也在lastPlacedIndex对应的oldFiber后面，就能知道两次更新中这两个节点的相对位置改变没有。
-
-我们用变量oldIndex表示遍历到的可复用节点在oldFiber中的位置索引。如果oldIndex < lastPlacedIndex，代表本次更新该节点需要向右移动。
-
-lastPlacedIndex初始为0，每遍历一个可复用的节点，如果oldIndex >= lastPlacedIndex，则lastPlacedIndex = oldIndex。
-```
-
-上面总结来说就是第一轮遍历得到 newChildren 和 oldFiber，此时都存在，说明有位置发生了改变，接下来
-lastPlacedIndex = 0，
-将剩余 oldFiber 保存为 map， 继续遍历剩余 newChildren，拿到 newChildren 第一个元素的 key 值，在 map 表里寻找赋值给 oldIndex，
-如果 oldIndex >= lastPlacedIndex 代表该可复用节点不需要移动
-并将 lastPlacedIndex = oldIndex;
-如果 oldIndex < lastplacedIndex 该可复用节点之前插入的位置索引小于这次更新需要插入的位置索引，代表该节点需要向右移动
-这样的话就会找到移动的点，移动到相应位置，而他之后的点顺序不需要发生改变
-
-> 注意，这样会出现一个问题，即 abcd 变为 dabc，那么 React 会保持 d 不变，将 acb 移动到最后， 所以说考虑性能，我们要尽量减少将节点从后面移动到前面的操作
-
-[卡老师这两个 demo 看下去就会很清晰的明白了](https://react.iamkasong.com/diff/multi.html#demo1)
+所以，当某次更新含有 tag 为 ForceUpdate 的 Update，那么当前 ClassComponent 不会受其他性能优化手段（shouldComponentUpdate|PureComponent）影响，一定会更新。
