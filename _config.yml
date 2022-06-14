@@ -85,7 +85,7 @@ disqus_shortname:
 #  - hexo-generator-baidu-sitemap
 #  - hexo-generator-sitemap
 
-theme: yilia
+theme: yilia-plus
 exclude_generator:
 
 # Deployment
@@ -107,11 +107,6 @@ sitemap:
 baidusitemap:
   path: baidusitemap.xm
 
-feed:
-  type: atom
-  path: atom.xml
-  limit: 100
-
 jsonContent:
   meta: false
   pages: false
@@ -130,3 +125,17 @@ jsonContent:
     excerpt: false
     categories: false
     tags: true
+
+# Extensions
+plugins: hexo-generator-feed
+
+# Feed Atom
+feed:
+  type: atom
+  path: atom.xml
+  limit: 20
+
+# https://github.com/JoeyBling/hexo-filter-image
+filter_image:
+  # 日志是否启用
+  log: true
