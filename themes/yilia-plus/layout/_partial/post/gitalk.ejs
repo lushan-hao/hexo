@@ -1,0 +1,21 @@
+<% if (!index && theme.gitalk.client_id && theme.gitalk.client_secret){ %>
+    <div id="gitalk-container"></div>
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css">
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+    var gitalk = new Gitalk({
+      clientID: '<%=theme.gitalk.client_id%>',
+      clientSecret: '<%=theme.gitalk.client_secret%>',
+      repo: '<%=theme.gitalk.repo%>',
+      owner: '<%=theme.gitalk.owner%>',
+      admin: '<%=theme.gitalk.admin%>',
+     //id 是为了保证issue的唯一性，id长度不能大于50，因此这里我们使用路径来当id，做一个截取，最好不要修改此配置项，否则可能导致评论丢失  
+      id: <%=theme.gitalk.id%>.slice(<%=theme.gitalk.id%>.length-25),
+      distractionFreeMode: '<%=theme.gitalk.distraction_free_mode%>',
+      labels: '<%=theme.gitalk.labels%>'.split(',').filter(l => l) ,
+    })
+    gitalk.render('gitalk-container')
+    </script>
+    <% } %>
+    
+    

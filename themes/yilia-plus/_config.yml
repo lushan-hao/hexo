@@ -120,7 +120,7 @@ gitment_oauth:
 # 关于如何集成:https://www.jianshu.com/p/f5c4633524c7
 # 基于码云的评论系统(https://gitee.com/zhousiwei/giteement)
 giteement:
-  enable: true # 是否启用码云评论系统
+  enable: false # 是否启用码云评论系统
   # 是否使用官方js(false可以提升访问速度)
   remote: false
   redirect_uri: "http://www.haols.top" # 应用回调地址(请和配置的第三方应用保持一致)
@@ -132,6 +132,17 @@ giteement:
   gitment_oauth:
     client_id: "ed3d36d7930ef0a64471003f0bb00d925f33a0eb17b301b347aebf77e24bfe62" #client ID
     client_secret: "d183c7ff05619efc08d31ddab3d1ab04b3de85bba338404960c3304804f09d44" #client secret
+
+# 评论
+gitalk:
+  client_id: "c4908f113a7dd85f0ea3" #上面得到的client_id
+  client_secret: "ee07e32b02985200fb7288e3ce82da63ac9314c6" #上面得到的secret
+  repo: "hexo" #填写你存储评论的仓库名称，一般填写自己的博客仓库名即可
+  owner: "lushan-hao" #仓库的所有者,填写你的用户名即可
+  admin: ["lushan-hao"] #仓库的管理员，没有特殊情况填你一个你自己的用户名即可
+  id: location.href #issue的id,具有唯一性，默认是location.href，长度小于50，下面的步骤中后面会对id做一些修改
+  distraction_free_mode: true #类似Facebook评论框的全屏遮罩效果
+  labels: ["Comment"] #issue的标签，默认['Gitalk']
 
 # 访问量统计功能()
 busuanzi:
@@ -225,11 +236,11 @@ live2d:
   # 模型名称(取值请参考：https://github.com/JoeyBling/hexo-theme-yilia-plus/wiki/live2d%E6%A8%A1%E5%9E%8B%E5%8C%85%E5%B1%95%E7%A4%BA)
   model: hibiki
   display:
-    position: right # 显示位置：left/right(default: 'right')
+    position: left # 显示位置：left/right(default: 'right')
     width: 145 # 模型的长度(default: 150)
     height: 315 # 模型的高度(default: 300)
     hOffset: 50 # 水平偏移(default: 0)
-    #vOffset: -20 # 垂直偏移(default: -20)
+    vOffset: 30 # 垂直偏移(default: -20)
   mobile:
     show: false # 是否在移动设备上显示(default: true)
     scale: 0.6 # 移动设备上的缩放(default: 0.5)

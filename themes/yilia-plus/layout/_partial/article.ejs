@@ -108,6 +108,20 @@
 
 <% if (!index && post.comments){ %>
 
+<% if (theme.gitalk && theme.gitalk.client_id && theme.gitalk.client_secret){ %>
+    <section id="comments" class="comments">
+      <style>
+        .comments{margin:30px;padding:10px;background:#fff}
+        @media screen and (max-width:800px){.comments{margin:auto;padding:10px;background:#fff}}
+      </style>
+      <%- partial('post/gitalk', {
+        key: post.slug,
+        title: post.title,
+        url: config.url+url_for(post.path)
+        }) %>
+  </section>
+<% } %>
+
 <% if (theme.changyan_appid && theme.changyan_conf){ %>
 <%- partial('post/changyan', {
       key: post.slug,
