@@ -6,17 +6,17 @@ menu:
 
 # subNav-子导航
 subNav:
-  - github: "https://github.com/lushan-hao"
-  - github: "#" # (支持设置多个)
-  - gitee: "#" # 码云
-  - jianshu: "#" #简书
+  - github: "https://github.com/lushan-hao" # (支持设置多个)
+  - gitee: "https://gitee.com/lanshenyuan" # 码云
+  - weixin: "assets/img/QCcode.jpg"
+  # - jianshu: "#" #简书
   # - cnblog: "#"
   # - blog: "#"
   # - csdn: "#"
   # - rss: "#"
   # - zhihu: "#"
   # - qq: "img/2434387555.jpg"
-  # - weixin: "img/weixin_.png"
+  - blog: "http://www.haols.top:9000/"
   # - weibo: "#"
   # - douban: "#"
   # - segmentfault: "#"
@@ -268,19 +268,20 @@ smart_menu:
 friends:
   技术笔记: #网站名称
     #网站地址
-    url: https://zhousiwei.gitee.io/ibooks/
+    url: http://www.haols.top/
     #网站图片(可忽略不写)
-    img: https://zhousiwei.gitee.io/ibooks/favicon.ico
+    img: https://img0.baidu.com/it/u=3994970838,136347170&fm=253&fmt=auto&app=138&f=JPEG?w=500&h=615
     #网站简介(可忽略不写)
-    description: 记录工作和学习过程中的笔记：Java、前端开发、Hexo博客、聚合支付、Linux笔记、ElasticSearch、ELK日志分析
+    description: 记录工作和学习过程中的笔记：前端、技术、日常
   GitHub:
-    url: https://github.com/JoeyBling
+    url: https://github.com/lushan-hao
   码云:
-    url: https://gitee.com/zhousiwei
+    url: https://gitee.com/lanshenyuan
   简书:
-    url: https://www.jianshu.com/u/02cbf31a043a
+    url: false
   CSDN:
-    url: https://blog.csdn.net/qq_30930805
+    url: false
+  小组件: http://www.haols.top:9000/
 
 # 关于我
 aboutme: <br>前端小白<br>谢谢大家
