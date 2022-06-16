@@ -231,6 +231,8 @@ export const Deletion = /*                 */ 0b00000000001000;
 
 > 在 mount 时只有 rootFiber 会赋值 Placement effectTag，在 commit 阶段只会执行一次插入操作。
 
+> 还需要提一点的是，一个 FunctionComponent 含有 useEffect 或 useLayoutEffect，他对应的 Fiber 节点也会被赋值 effectTag。
+
 #### completeWork
 
 completeWork 也是针对不同 fiber.tag 调用不同的处理逻辑
@@ -358,7 +360,7 @@ effectList 中第一个 Fiber 节点保存在 fiber.firstEffect，最后一个�
 #### 重重重重重点，梳理流程
 
 > - beginWork mount：根据 fiber.tag 的不同，创建不同的 fiber 节点，执行 mountChildFibers（生成新的子 Fiber 节点并赋值给 workInProgress.child）这里所有节点不会存在 effectTag
-> - beginWork update：满足一定条件时可以复用 current 节点，使用 reconcileChildFibers 生成新的子 Fiber 节点并赋值给 workInProgress.child）但是这里会为生成的 Fiber 节点带上 effectTag 属性
+> - beginWork update：执行 diff 算法，满足一定条件时可以复用 current 节点，使用 reconcileChildFibers 生成新的子 Fiber 节点并赋值给 workInProgress.child）但是这里会为生成的 Fiber 节点带上 effectTag 属性
 >   原生 DOM：
 > - completeWork mount：为 Fiber 节点生成对应的 DOM 节点，将子孙 DOM 节点插入刚生成的 DOM 节点中，处理 props，
 >   其中存在 appendAllChildren 方法，由于 completeWork 属于“归”阶段调用的函数，每次调用 appendAllChildren 时都会将已生成的子孙 DOM 节点插入当前生成的 DOM 节点下。那么当“归”到 rootFiber 时，我们已经有一个构建好的离屏 DOM 树
