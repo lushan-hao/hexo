@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "react源码-react一些知识点（持续补充）"
+title: "react 源码-react 一些知识点（持续补充）"
 date: 2022-05-31 20:00
 comments: true
 tags:
@@ -17,9 +17,9 @@ tags:
 
 #### JSX
 
-首先，我想问一下，什么是 jsx，React 官网对其描述
+想起一个问题，什么是 jsx，大家好像都知道，但是却又不是能够特别清晰的描述出来，
 
-> JSX 是一个 JavaScript 的语法扩展。JSX 就是用来声明 React 当中的元素，React 使用 JSX 来描述用户界面。
+> React 官网对其描述：JSX 是一个 JavaScript 的语法扩展。JSX 就是用来声明 React 当中的元素，React 使用 JSX 来描述用户界面。
 
 JSX 在编译时会被 Babel 编译为 React.createElement 方法。所以在每个使用 JSX 的 JS 文件中，需要显式的声明`import React from 'react';`（React17 以后不需要了，[链接](https://zh-hans.reactjs.org/blog/2020/09/22/introducing-the-new-jsx-transform.html)）
 
@@ -56,12 +56,13 @@ const ReactElement = function (type, key, ref, self, source, owner, props) {
 ```
 
 React.createElement 最终会调用 ReactElement 方法返回一个包含组件数据的对象，该对象有个参数`$$typeof: REACT_ELEMENT_TYPE`标记了该对象是个 React Element。
+在 react 中，只要返回的 jsx 不是不是 null（通过 React.createElement()），那么返回的都是 React Element
 
-例如：<p title="标签">1</p> -> React.createElement("p", { title: "标签" }, "1")
+例如：`<p title="标签">1</p> -> React.createElement("p", { title: "标签" }, "1")`
 
 #### JSX 与 Fiber 节点
 
-JSX 是一个语法糖，返回的是一种描述当前组件内容的对象，
+JSX 是一种描述当前组件内容的数据结构，他不包含组件 schedule、reconcile、render 所需的相关信息。
 
 有些信息不包括在 JSX 中，这而包含在 Fiber 节点中：
 

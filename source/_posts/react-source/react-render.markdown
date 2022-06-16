@@ -12,9 +12,11 @@ tags:
 
 <!-- more -->
 
+结尾处我理解的有更详细的流程梳理，可以先看，熟悉大概，也可以看到结尾，整合一下混乱的思维
+
 #### 流程概览
 
-render 阶段开始于 performSyncWorkOnRoot 或 performConcurrentWorkOnRoot 方法的调用。这取决于本次更新是同步更新还是异步更新。
+render 阶段开始于 performSyncWorkOnRoot 或 performConcurrentWorkOnRoot 方法的调用。这取决于本次更新是同步更新还是异步更新
 
 ```js
 // performSyncWorkOnRoot会调用该方法  同步
@@ -93,7 +95,7 @@ function beginWork(
 }
 ```
 
-- current：当前组件对应的 Fiber 节点在上一次更新时的 Fiber 节点，即 workInProgress.alternate
+- current：当前组件对应的 Fiber 节点在上一次更新时的 Fiber 节点，即 workInProgress.alternate,也就是对应的 currecntFiber 的节点
 - workInProgress：当前组件对应的 Fiber 节点
 - renderLanes：优先级相关
 
@@ -105,6 +107,40 @@ function beginWork(
 - `mount`时: 根据 fiber.tag 不同，创建不同类型的子 Fiber 节点
 
 深度优先遍历
+
+##### 递阶段 update 的过程
+
+```js
+if (current !== null) {
+  const oldProps = current.memoizedProps;
+  const newProps = workInProgress.pendingProps;
+
+  if (
+    oldProps !== newProps ||
+    hasLegacyContextChanged() ||
+    (__DEV__ ? workInProgress.type !== current.type : false)
+  ) {
+    didReceiveUpdate = true;
+  } else if (!includesSomeLane(renderLanes, updateLanes)) {
+    didReceiveUpdate = false;
+    switch (
+      workInProgress.tag
+      // 省略处理
+    ) {
+    }
+    return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
+  } else {
+    didReceiveUpdate = false;
+  }
+} else {
+  didReceiveUpdate = false;
+}
+```
+
+可以看到，当 `current!== null` 此时，进入 update 中，当满足两个条件就会 `didReceiveUpdate === false` 此时返回克隆的 current.child 就可以了，即可以复用上一次更新的节点
+
+- oldProps === newProps && workInProgress.type === current.type: props 与 fiber.type 不变
+- !includesSomeLane(renderLanes, updateLanes): 当前 Fiber 节点优先级不够
 
 ##### 递阶段 mount 的过程
 
@@ -194,40 +230,6 @@ export const Deletion = /*                 */ 0b00000000001000;
 ```
 
 > 在 mount 时只有 rootFiber 会赋值 Placement effectTag，在 commit 阶段只会执行一次插入操作。
-
-##### 递阶段 update 的过程
-
-```js
-if (current !== null) {
-  const oldProps = current.memoizedProps;
-  const newProps = workInProgress.pendingProps;
-
-  if (
-    oldProps !== newProps ||
-    hasLegacyContextChanged() ||
-    (__DEV__ ? workInProgress.type !== current.type : false)
-  ) {
-    didReceiveUpdate = true;
-  } else if (!includesSomeLane(renderLanes, updateLanes)) {
-    didReceiveUpdate = false;
-    switch (
-      workInProgress.tag
-      // 省略处理
-    ) {
-    }
-    return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
-  } else {
-    didReceiveUpdate = false;
-  }
-} else {
-  didReceiveUpdate = false;
-}
-```
-
-可以看到，当 `current!== null` 此时，进入 update 中，当满足两个条件就会 `didReceiveUpdate === false` 此时返回克隆的 current.child 就可以了
-
-- oldProps === newProps && workInProgress.type === current.type: props 与 fiber.type 不变
-- !includesSomeLane(renderLanes, updateLanes): 当前 Fiber 节点优先级不够
 
 #### completeWork
 
@@ -353,6 +355,24 @@ commit 阶段需要找到所有有 effectTag 的 Fiber 节点并依次执行 eff
 effectList 中第一个 Fiber 节点保存在 fiber.firstEffect，最后一个元素保存在 fiber.lastEffect。
 类似 appendAllChildren，在“归”阶段，所有有 effectTag 的 Fiber 节点都会被追加在 effectList 中，最终形成一条以 rootFiber.firstEffect 为起点的单向链表
 
+#### 重重重重重点，梳理流程
+
+> - beginWork mount：根据 fiber.tag 的不同，创建不同的 fiber 节点，执行 mountChildFibers（生成新的子 Fiber 节点并赋值给 workInProgress.child）这里所有节点不会存在 effectTag
+> - beginWork update：满足一定条件时可以复用 current 节点，使用 reconcileChildFibers 生成新的子 Fiber 节点并赋值给 workInProgress.child）但是这里会为生成的 Fiber 节点带上 effectTag 属性
+>   原生 DOM：
+> - completeWork mount：为 Fiber 节点生成对应的 DOM 节点，将子孙 DOM 节点插入刚生成的 DOM 节点中，处理 props，
+>   其中存在 appendAllChildren 方法，由于 completeWork 属于“归”阶段调用的函数，每次调用 appendAllChildren 时都会将已生成的子孙 DOM 节点插入当前生成的 DOM 节点下。那么当“归”到 rootFiber 时，我们已经有一个构建好的离屏 DOM 树
+> - completeWork update：主要是处理 props，比如：onClick、onChange 等回调函数的注册，被处理完的 props 会被赋值给 workInProgress.updateQueue，并最终会在 commit 阶段被渲染在页面上。
+
+> - 在“归”阶段，所有有 effectTag 的 Fiber 节点都会被追加在 effectList 中，最终形成一条以 rootFiber.firstEffect 为起点的单向链表。（就是发生更改的一个链表）
+> - completeWork mount 中 appendAllChildren 作用：要通知 Renderer 将 Fiber 节点对应的 DOM 节点插入页面中，mount 阶段 fiber 节点没有 effectTag 属性，每个都更新？
+> - 假设 mountChildFibers 也会赋值 effectTag，那么可以预见 mount 时整棵 Fiber 树所有节点都会有 Placement effectTag。那么 commit 阶段在执行 DOM 操作时每个节点都会执行一次插入操作，这样大量的 DOM 操作是极低效的。
+> - 为了解决这个问题，在 mount 时只有 rootFiber 会赋值 Placement effectTag，在 commit 阶段只会执行一次插入操作。
+
+有问题，可以评论一下，互相学习
+
 #### 结尾
 
 至此，render 阶段全部工作完成。在 performSyncWorkOnRoot 函数中 fiberRootNode 被传递给 commitRoot 方法，开启 commit 阶段工作流程。
+
+本文主要记录我在学习卡颂大佬的 React 技术揭秘一文的所得: [React 技术揭秘](https://react.iamkasong.com/)
