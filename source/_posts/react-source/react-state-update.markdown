@@ -31,13 +31,14 @@ tags:
 
 ##### 从 fiber 到 root
 
-现在触发状态更新的 fiber 上已经包含 Update 对象，render 阶段是从 rootFiber 开始向下遍历。那么如何从触发状态更新的 fiber 得到 rootFiber 呢？调用 markUpdateLaneFromFiberToRoot 方法。
+现在触发状态更新的 fiber 上已经包含 Update 对象，重新执行 render 阶段，但是 render 阶段是从 rootFiber 开始向下遍历。那么如何从触发状态更新的 fiber 得到 rootFiber 呢？调用 markUpdateLaneFromFiberToRoot 方法。
 
 > markUpdateLaneFromFiberToRoot: 该方法做的工作可以概括为：从触发状态更新的 fiber 一直向上遍历到 rootFiber，并返回 rootFiber
 
 ##### 调度更新
 
 现在我们拥有一个 rootFiber，该 rootFiber 对应的 Fiber 树中某个 Fiber 节点包含一个 Update。接下来通知 Scheduler 根据更新的优先级，决定以同步还是异步的方式调度本次更新。
+其中，scheduleCallback 和 scheduleSyncCallback 会调用 Scheduler 提供的调度方法根据优先级调度回调函数执行,其中调用`performSyncWorkOnRoot`和`performConcurrentWorkOnRoot`就是控制 render 阶段开始的调用了
 
 ```js
 if (newCallbackPriority === SyncLanePriority) {
@@ -55,8 +56,6 @@ if (newCallbackPriority === SyncLanePriority) {
   );
 }
 ```
-
-其中，scheduleCallback 和 scheduleSyncCallback 会调用 Scheduler 提供的调度方法根据优先级调度回调函数执行,其中调用`performSyncWorkOnRoot`和`performConcurrentWorkOnRoot`就是控制 render 阶段开始的调用了
 
 此时的流程是
 
@@ -120,19 +119,23 @@ Fiber 节点最多同时存在两个 updateQueue：
 
 ```js
 const queue: UpdateQueue<State> = {
+  // 本次更新前该Fiber节点的state，Update基于该state计算更新后的state。
   baseState: fiber.memoizedState,
+  // 本次更新前该Fiber节点已保存的Update。以链表形式存在，链表头为firstBaseUpdate，链表尾为lastBaseUpdate
   firstBaseUpdate: null,
   lastBaseUpdate: null,
+  // 触发更新时，产生的Update会保存在shared.pending中形成单向环状链表。当由Update计算state时这个环会被剪开并连接在lastBaseUpdate后面。
   shared: {
     pending: null,
   },
+  // 数组。保存update.callback !== null的Update
   effects: null,
 };
 ```
 
-[看完这个例子就会明白整个流程了](https://react.iamkasong.com/state/update.html#%E4%BE%8B%E5%AD%90)
+[看完这个例子就会明白整个流程了](https://react.iamkasong.com/state/update.html#updatequeue)
 
-总结来说存留着上次 render 阶段没有处理的优先级较低的 Update，存在 bfiber.updateQueue.baseUpdate 中，本次更新产生的新的 Update 会存储在 fiber.updateQueue.shared.pending 中形成环状链表， render 时剪开环，连接在 updateQueue.lastBaseUpdate 后面，接下来遍历 updateQueue.baseUpdate 链表，以 fiber.updateQueue.baseState 为初始 state，依次与遍历到的每个 Update 计算并产生新的 state
+总结来说存留着上次 render 阶段没有处理的优先级较低的 Update，存储在 fiber.updateQueue.firstBaseUpdate 到 lastBaseUpdate 的链表（先简称 updateQueue.baseUpdate）中，本次更新产生的新的 Update 会存储在 fiber.updateQueue.shared.pending 中形成环状链表， render 时剪开环，连接在 updateQueue.lastBaseUpdate 后面，接下来遍历 updateQueue.baseUpdate 链表，以 fiber.updateQueue.baseState 为初始 state，依次与遍历到的每个 Update 计算并产生新的 state
 
 #### 深入理解优先级
 
@@ -150,6 +153,7 @@ const queue: UpdateQueue<State> = {
 ![一个流程](../../assets/blogImg/react-source/update-process.png)
 
 [这个例子看着还是有点生涩，回头多看几遍](https://react.iamkasong.com/state/priority.html#%E4%BE%8B%E5%AD%90)
+不过可以看到 u2 对应的更新执行了两次，相应的 render 阶段的生命周期勾子 componentWillXXX 也会触发两次。这也是为什么这些勾子会被标记为 unsafe\_。
 
 ##### 如何保证状态正确
 
@@ -239,3 +243,5 @@ const shouldUpdate =
 - checkShouldComponentUpdate：内部会调用 shouldComponentUpdate 方法。以及当该 ClassComponent 为 PureComponent 时会浅比较 state 与 props。
 
 所以，当某次更新含有 tag 为 ForceUpdate 的 Update，那么当前 ClassComponent 不会受其他性能优化手段（shouldComponentUpdate|PureComponent）影响，一定会更新。
+
+本文主要记录我在学习卡颂大佬的 React 技术揭秘一文的所得: [React 技术揭秘-状态更新](https://react.iamkasong.com/state/prepare.html)

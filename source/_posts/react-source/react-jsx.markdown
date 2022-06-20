@@ -72,3 +72,34 @@ JSX 是一种描述当前组件内容的数据结构，他不包含组件 schedu
 
 在组件 mount 时，Reconciler 根据 JSX 描述的组件内容生成组件对应的 Fiber 节点。
 在 update 时，Reconciler 将 JSX 与 Fiber 节点保存的数据对比，生成组件对应的 Fiber 节点，并根据对比结果为 Fiber 节点打上标记。
+
+#### componentWillXXX 为什么 UNSAFE
+
+以下三个生命周期被标记 UNSAFE
+
+- componentWillMount
+- componentWillRecieveProps
+- componentWillUpdate
+
+先说两个可以替代这三个生命周期的方法
+
+> - getDerivedStateFromProps: 会在调用 render 方法之前调用，即在渲染 DOM 元素之前会调用，并且在初始挂载及后续更新时都会被调用。getDerivedStateFromProps 的存在只有一个目的：让组件在 props 变化时更新 state。该方法返回一个对象用于更新 state，如果返回 null 则不更新任何内容。
+> - 在最近一次渲染输出（提交到 DOM 节点）之前调用。它使得组件能在发生更改之前从 DOM 中捕获一些信息（例如，滚动位置）。此生命周期方法的任何返回值将作为参数传递给 componentDidUpdate()。不常用
+
+为什么 componentWillXXX 被标记 UNSAFE？
+
+```js
+// unresolvedOldProps为组件上次更新时的props，而unresolvedNewProps则来自ClassComponent调用this.render返回的JSX中的props参数。可见他们的引用是不同的。所以他们全等比较为false。所以每次父组件更新都会触发当前组件的componentWillRecieveProps
+if (unresolvedOldProps !== unresolvedNewProps || oldContext !== nextContext) {
+  // callComponentWillReceiveProps方法会调用componentWillRecieveProps
+  callComponentWillReceiveProps(
+    workInProgress,
+    instance,
+    newProps,
+    nextContext
+  );
+}
+```
+
+React 更新后最主要的区别是将同步的更新机制重构为异步可中断的更新。
+因为变为异步可中断的更新，所以就会出现调度的问题，react 中高优先级的会先执行，低优先级的会下一次执行，但是有可能顺序不同，例如`A1 - B2 - C1 - D2`, 执行时会先执行 A1 - C1 ，下一次执行低优先级，但是可能 C1 依赖于 B2，所以 C1 还会再执行一次，所以 C2 可能会执行 2 次，所以在 componentWillReceiveProps 可能会执行两次，这也就是为什么 componentWillXXX 被标记为 UNSAFE
