@@ -12,6 +12,8 @@ tags:
 
 <!-- more -->
 
+结尾处我理解的有更详细的流程梳理，可以先看，熟悉大概，也可以看到结尾，整合一下混乱的思维
+
 在 rootFiber.firstEffect 上保存了一条需要执行副作用的 Fiber 节点的单向链表 effectList，这些 Fiber 节点的 updateQueue 中保存了变化的 props。还得记住个很重要的点，commit 阶段是同步的
 
 commit 阶段，会遍历归阶段的链表，操作叫做 mutation，对于 hooksComponents 来说 mutation 意味着 dom 节点的增删改
@@ -279,5 +281,16 @@ root.current = finishedWork;
 上面说过，执行是在在 mutation 阶段结束后，layout 阶段开始前
 componentWillUnmount 会在 mutation 阶段执行。此时 current Fiber 树还指向前一次更新的 Fiber 树，在生命周期钩子内获取的 DOM 还是更新前的。
 componentDidMount 和 componentDidUpdate 会在 layout 阶段执行。此时 current Fiber 树已经指向更新后的 Fiber 树，在生命周期钩子内获取的 DOM 就是更新后的。
+
+#### 流程梳理
+
+在 commit 阶段，分为几个模块
+
+- before mutation 之前：主要做一些变量赋值，状态重置的工作，将 effectList 赋值给 firstEffect
+- before mutation 阶段：调度 useEffect（异步调度）， 调用 getSnapshotBeforeUpdate
+- mutation 阶段：会遍历 effectList， 每个节点执行 1. 更新 ref，2.ContentReset effectTag 重置文字节点 3. 根据 effectTag 分别处理（插入、更新、清除）， 更新时执行 useLayoutEffect 的销毁函数， 清除时调用 ClassComponent 的 componentWillUnmount，解绑 ref，调度 useEffect 的销毁函数， 并且最重要的一点，current Fiber 树切换
+- layout 阶段：遍历 effectList： 1. 赋值 ref 2. 调用生命周期钩子和 hook 相关操作（this.setState 如果赋值了第二个参数回调函数，也会在此时调用， 调用 useLayoutEffect hook 的回调函数， 调度 useEffect 的销毁与回调函数）
+
+- layout 之后：useEffect 相关的处理，触发一些钩子，类似于 componentDidXXX， 和 hooks，类似于 useLayoutEffect、useEffect
 
 本文主要记录我在学习卡颂大佬的 React 技术揭秘一文的所得: [React 技术揭秘-commit 阶段](https://react.iamkasong.com/renderer/prepare.html#before-mutation%E4%B9%8B%E5%89%8D)
