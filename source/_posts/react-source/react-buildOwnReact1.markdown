@@ -38,7 +38,7 @@ const element = <h1 title="foo">Hello</h1>
 const element = React.createElement("h1", { title: "foo" }, "Hello");
 //最终函数生成的对象
 const element = {
-  // 是一个字符串，它指定我们要创建的 DOM 节点的类型
+  // 是一个字符串，它指定我们要创建的 DOM 节点的类型， 而且还可以是function，对应的是函数组件的自身
   type: "h1",
   // 另一个对象，它具有 JSX 属性中的所有键和值。它还有一个特殊的属性：children.
   props: {
@@ -402,6 +402,8 @@ function commitWork(fiber) {
   commitWork(fiber.sibling)//兄弟节点
 }
 ```
+
+其中 commitRoot 函数执行，就代表着进入到了 commit 阶段，commit 阶段的主要子阶段有 before mutation、mutation、layout
 
 ### 链接
 
