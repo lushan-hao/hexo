@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "hooks 闭包陷阱"
-date: 2022-06-28 19:00
+date: 2022-06-25 19:00
 comments: true
 tags:
   - react
@@ -153,7 +153,12 @@ export default App;
 
 闭包陷阱产生的原因就是 useEffect 等 hook 里用到了某个 state，但是没有加到 deps 数组里，这样导致 state 变了却没有执行新传入的函数，依然引用的之前的 state。
 
-但是解决方法不唯一啊，而且上面每次都会创建定时器，然后销毁定时器，中间还需要代码的执行时间，导致定时器不准确，所以拿出利器-useRef，程序员上代码说话
+虽然看似解决了，但是好像还有点小问题
+
+> React 会在每次渲染后重执行 effects，这是有目的的，这有助于避免 React class 组件的某种 bugs。
+> 这通常是好的，因为需要许多订阅 API 可以随时顺手移除老的监听者和加个新的。但是，setInterval 和它们不一样。当我们执行 clearInterval 和 setInterval 时，它们会进入时间队列里，如果我们频繁重渲染和重执行 effects，interval 有可能没有机会被执行！[演示地址](https://codesandbox.io/s/9j86r218y4?file=/src/index.js)
+
+所以拿出利器-useRef，程序员上代码说话
 
 > useRef 是在 memorizedState 链表中放一个对象，current 保存某个值。
 
@@ -189,7 +194,74 @@ export default App;
 推荐一个 ahooks 的 hooks，将上述逻辑封装了起来
 [useLatest](https://github.com/alibaba/hooks/blob/master/packages/hooks/src/useLatest/index.ts)
 
+```js
+import React, { useState, useEffect } from "react";
+import { useLatest } from "ahooks";
+
+export default () => {
+  const [count, setCount] = useState(0);
+
+  const latestCountRef = useLatest(count);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCount(latestCountRef.current + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <>
+      <p>count: {count}</p>
+    </>
+  );
+};
+```
+
+还有一个 Dan 写的组件`useInterval`,可以进行暂停操作,[在线演示地址](https://codesandbox.io/s/l240mp2pm7?file=/src/index.js:742-1162)
+
+```js
+import React, { useState, useEffect, useRef } from "react";
+import ReactDOM from "react-dom";
+
+function Counter() {
+  const [count, setCount] = useState(0);
+  const [delay, setDelay] = useState(1000);
+  const [isRunning, setIsRunning] = useState(true);
+
+  useInterval(
+    () => {
+      // Your custom logic here
+      setCount(count + 1);
+    },
+    isRunning ? delay : null
+  );
+
+  function handleDelayChange(e) {
+    setDelay(Number(e.target.value));
+  }
+
+  function handleIsRunningChange(e) {
+    setIsRunning(e.target.checked);
+  }
+
+  return (
+    <>
+      <h1>{count}</h1>
+      <input
+        type="checkbox"
+        checked={isRunning}
+        onChange={handleIsRunningChange}
+      /> Running
+      <br />
+      <input value={delay} onChange={handleDelayChange} />
+    </>
+  );
+}
+```
+
 **五、参考资料**
 [从根上理解 React Hooks 的闭包陷阱（续集）](https://juejin.cn/post/7093931163500150820)  
 [从 react hooks“闭包陷阱”切入，浅谈 react hooks](https://juejin.cn/post/6844904193044512782)
 [React 技术揭秘](https://react.iamkasong.com/)
+[使用 React Hooks 声明 setInterval](https://overreacted.io/zh-hans/making-setinterval-declarative-with-react-hooks/)
