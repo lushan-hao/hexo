@@ -1,6 +1,3 @@
-使用 Hexo 生成静态文件
-```bash
-~ hexo generate
-```
-简写为`hexo g`
+本博客在线地址，欢迎大家指出问题
 
+[sunny 的个人博客: http://www.haols.top/](http://www.haols.top/)

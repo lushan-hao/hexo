@@ -121,7 +121,7 @@ function useLatest<T>(value: T) {
 export default useLatest;
 ```
 
-这里代码看我上一篇文章[hooks 闭包陷阱](http://www.haols.top2022/06/28/react-source/react-closure/#more)有比较好的解释
+这里代码看我上一篇文章[hooks 闭包陷阱](http://www.haols.top2022/06/25/ract-source/react-closure/#more)有比较好的解释
 
 #### useUnmount
 
