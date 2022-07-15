@@ -479,3 +479,4 @@ var fooReference = {
 ImplicitThisValue 方法的介绍：该函数始终返回 undefined,所以最后 this 的值就是 undefined
 
 emm，最后这部分判断出来的我很懵，看看 github，然后先简单读一读后面的，看看有没有继续拓展这部分
+这个可以说对 Reference Type 这里进行一个小说明，便于理解:[Reference Type](https://zh.javascript.info/reference-type)
