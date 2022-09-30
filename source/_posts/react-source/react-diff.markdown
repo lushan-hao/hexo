@@ -12,7 +12,7 @@ tags:
 
 <!-- more -->
 
-首先，需要明确 diff 算法发生在 beginWork 中的需要 uodate 的组件
+首先，需要明确 diff 算法发生在 beginWork 中的需要 update 的组件
 
 > 1. current Fiber： 如果该 DOM 节点已在页面中，current Fiber 代表该 DOM 节点对应的 Fiber 节点
 > 2. workInProgress Fiber： 如果该 DOM 节点将在本次更新中渲染到页面中，workInProgress Fiber 代表该 DOM 节点对应的 Fiber 节点。
