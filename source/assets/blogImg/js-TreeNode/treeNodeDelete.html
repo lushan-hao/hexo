@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Document</title>
+</head>
+
+<body>
+  <div id="root"></div>
+</body>
+<script>
+  // 方法一：暂未解决
+  // function noSelectTree(treeData, sleKeyList, unSleKey) {
+  //   let newArr = [];
+  //   treeData.forEach(p => {
+  //     if (sleKeyList.find(p1 => p1 === p.key) && p.key !== unSleKey) {
+  //       let List = sleKeyList.filter(p1 => p1 !== unSleKey);
+  //       let tar = p.addChildrenKey.find(p1 => List.includes(p1)) || 
+  //       if (p.addChildrenKey.find(p1 => p1 === unSleKey) && ) {
+  //         newArr.push(p.key)
+  //       }
+  //       if (!p.addChildrenKey.find(p1 => p1 === unSleKey)) {
+  //         newArr.push(p.key)
+  //       }
+  //       if (p.children && p.key !== unSleKey) {
+  //         newArr = newArr.concat(noSelectTree(p.children, sleKeyList, unSleKey));
+  //       }
+  //     }
+  //   })
+  //   return newArr
+  // }
+
+  // function handleUncheck(treeData, sleKeyList, unSleKey) {
+  //   const arr = noSelectTree(treeData, sleKeyList, unSleKey);
+  //   console.log(arr, 'arr')
+  // }
+
+  // function addParent(treeData, parentKey) {
+  //   for (let i = 0; i < treeData.length; i++) {
+  //     treeData[i].parent = `${parentKey ? parentKey : ''}$${treeData[i].key}`;
+  //     if (treeData[i]?.children) {
+  //       addParent(treeData[i].children, treeData[i].parent)
+  //     }
+  //   }
+  // }
+
+  // 方法2
+  // function addChildrenKey(treeData, parentKey) {
+  //   const List = [];
+  //   for (let i = 0; i < treeData.length; i++) {
+  //     treeData[i].addChildrenKey = [];
+  //     List.push(treeData[i].key);
+  //     if (treeData[i]?.children) {
+  //       treeData[i].addChildrenKey.push(...addChildrenKey(treeData[i].children, treeData[i].addChildrenKey));
+  //       List.push(addChildrenKey(treeData[i].children, treeData[i].addChildrenKey).toString());
+  //     }
+  //   }
+  //   return List
+  // }
+
+  // function handleUncheck(treeData, sleKeyList, unSleKey) {
+  //   addChildrenKey(treeData);
+  //   console.log(treeData, 'treeData')
+  //   // const arr = noSelectTree(treeData, sleKeyList, unSleKey);
+  //   // console.log(arr, 'arr')
+  // }
+
+
+  // 方法3： 树结构打平思路，不过也不是很适用这个https://juejin.cn/post/7142649750402121742#heading-7
+  let newMap = new Map();
+
+  function MapArray(treeData, parentId) {
+    treeData.forEach(p => {
+      newMap.set(p.key, {
+        title: p.key,
+        children: p.children ? p.children.map(p => p.key) : null,
+        parentId,
+      });
+      if (p.children) {
+        MapArray(p.children, p.key);
+      }
+    })
+  }
+
+  function deleteNode(sleKeyList, newMap, unSleKey) {
+    const item = newMap.get(unSleKey);
+    // 删除该节点
+    const findIndex = sleKeyList.findIndex(p => p === unSleKey);
+    if (findIndex > -1) sleKeyList.splice(findIndex, 1);
+    // 删除该节点下面的子节点
+    if (item.children) {
+      item.children.forEach(p => {
+        const findChildIndex = sleKeyList.findIndex(p1 => p1 === p);
+        if (findChildIndex > -1) {
+          sleKeyList.splice(findChildIndex, 1);
+        }
+      })
+    }
+    return sleKeyList
+  }
+
+  function deleteNullChildrenNode(newSelList) {
+    for (let i = 0; i < newSelList.length; i++) {
+      const ItemMap = newMap.get(newSelList[i]);
+      if (ItemMap.children && ItemMap.children.every(ele => !newSelList.includes(ele))) {
+        newSelList.splice(i, 1);
+        newSelList = deleteNullChildrenNode(newSelList);
+        // 删除完一个立即打断
+        break
+      }
+    }
+    // 上面的可以立即打断，下面的不可以
+    // newSelList.forEach((p, index) => {
+    //   const ItemMap = newMap.get(p);
+    //   if (ItemMap.children && ItemMap.children.every(ele => !newSelList.includes(ele))) {
+    //     newSelList.splice(index, 1);
+    //     newSelList = deleteNullChildrenNode(newSelList)
+    //   }
+    // })
+    return newSelList
+  }
+
+  function handleUncheck(treeData, sleKeyList, unSleKey) {
+    console.time('1')
+    MapArray(treeData, '', 0);
+    console.log('newMap', newMap)
+    const newSelList = deleteNode(sleKeyList, newMap, unSleKey);
+    console.log('newSelList', newSelList)
+    const result = deleteNullChildrenNode(newSelList);
+    console.log('result', result);
+    console.timeEnd('1')
+    return result
+  }
+
+
+  const TREE_DATA = [
+    {
+      key: "a-1",
+      children: [
+        {
+          key: "b-1",
+          children: [
+            {
+              key: "c-1-1",
+            },
+            { key: "c-1-2" },
+          ],
+        },
+        { key: "b-2" },
+        { key: "b-3" },
+      ],
+    },
+    {
+      key: "a-2",
+    },
+  ];
+
+  handleUncheck(TREE_DATA, ['a-1', 'b-1', 'b-2', 'c-1-1'], 'c-1-1') // 'a-1', 'b-2']
+  handleUncheck(TREE_DATA, ['a-1', 'b-1', 'c-1-1', 'a-2'], 'b-1'); // ['a-1', 'a-2']
+  handleUncheck(TREE_DATA, ['a-1', 'b-1', 'c-1-1'], 'c-1-1'); // []
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</script>
+
+</html>
