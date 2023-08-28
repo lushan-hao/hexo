@@ -31,7 +31,7 @@ tags:
 
 #### 1）输入 url
 
-用户在浏览器中输入内容，浏览器会进行判断，判断是否 url，如果不是完整的 url 就会当成搜索内容，进行合成，合成一个合法的 url，然后走搜索的 url，如果是完整的 url，那么进行请求访问，
+用户在浏览器中输入内容，浏览器会（使用的是浏览器进程）进行判断，判断是否 url，如果不是完整的 url 就会当成搜索内容，进行合成，合成一个合法的 url，然后走搜索的 url，如果是完整的 url，那么进行请求访问，
 
 ##### 什么是 url
 
@@ -53,7 +53,7 @@ tags:
 > 强缓存主要包括 expires 和 cache-control
 >
 > - expries: expires 是 HTTP1.0 中定义的缓存字段。是一个时间戳，当我们请求一个资源，服务器返回时，可以在 Response Headers 中增加 expires 字段表示资源的过期时间。
-> - cache-control：由于 expries 存在问题（客户端和服务端存在时间差异，并且客户端的时间是可以更改的），所以 HTTP1.1 新增了 cache-control 字段解决，当 cache-control 和 expires 都存在时，cache-control 优先级更高。该字段是一个时间长度，单位秒，表示该资源过了多少秒后失效。当客户端请求资源的时候，发现该资源还在有效时间内则使用该缓存，不依赖客户端时间。
+> - cache-control：由于 expries 存在问题（客户端和服务端存在时间差异，并且客户端的时间是可以更改的），所以 HTTP1.1 新增了 cache-control 字段解决，当 cache-control 和 expires 都存在时，cache-control 优先级更高。该字段是一个时间长度，单位秒，表示该资源过了多少秒后失效。当客户端请求资源的时候，发现该资源还在有效时间内则使用该缓存，不依赖客户端时间。（比如设置 max-age，此时时间不依托客户端时间）
 > - pragma：no-cache （pragma -> cache-control -> expires）
 >   pragma 是一个在 HTTP1.0 中规定的通用首部，它用来向后兼容只支持 HTTP1.0 协议的缓存服务器，那时候 HTTP1.1 协议中的 Cache-Control 还没有出来。（注意：由于 Pragma 在 HTTP 响应中的行为没有确切规范，所以不能可靠替代 HTTP/1.1 中通用首部 Cache-Control，尽管在请求中，假如 Cache-Control 不存在的话，它的行为与 Cache-Control: no-cache 一致。建议只在需要兼容 HTTP/1.0 客户端的场合下应用 Pragma 首部。）（MDN 表述）
 
@@ -105,6 +105,8 @@ tags:
 
 - 开始发送 HTTP 请求报文。请求报文由请求行（request line）、请求头（header）、请求体三个部分组成
   客户端像浏览器发送请求行
+- 这里如果服务端返回 304，此时就使用协商缓存
+  协商缓存依托于强缓存，即从浏览器缓存中获取
 
 ```js
 // 请求方法是GET，路径为根路径，HTTP协议版本为1.1
@@ -127,11 +129,16 @@ HTTP/1.1 200 OK
   **下面这个图片我看看有一篇文章很不错，看着很清晰**
   ![流程](https://p1-jj.byteimg.com/tos-cn-i-t2oaga2asx/gold-user-assets/2019/12/15/16f080b095268038~tplv-t2oaga2asx-zoom-in-crop-mark:1304:0:0:0.awebp)
 
+> 协商缓存：
+>
+> 1. Last-Modified: 服务器返回 Last-Modified 指出最后修改时间，下一次请求在请求头上加 If-Modified-Since 作比较，没有修改返回 304， 问题是时间精确到秒，1s 内文件多次修改可能有问题
+> 2. Etag : 服务器返回 Etag 指定唯一标识，资源发生改变的时候，这个值也会发生改变， 下一次请求请求头上添加 If-None-Match，服务器作比较，这种更精确
+
 > 说实话这里也有考点，比如比较常用的请求头，响应头都有哪些，restful 风格接口还有常见的状态码等等
 
 #### 6)浏览器解析渲染页面
 
-主要流程如下：
+主要流程如下：(此时交给了渲染器进程：合成器线程、栅格化线程)
 
 1. 根据 HTML 文件解析出 DOM 树
 2. 根据 CSS 解析出 CSS 规则树
